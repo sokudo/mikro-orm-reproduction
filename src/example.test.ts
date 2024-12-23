@@ -102,17 +102,20 @@ afterAll(async () => {
 test("basic CRUD example", async () => {
   const repo = orm.em.create(RepoModel, {});
   const commit = new CommitModel({ sha: "repoSha", repo });
-  commit.tree = new TreeModel({ sha: "treeSha", repo, commit });
+  const tree = new TreeModel({ sha: "treeSha", repo, commit });
+  commit.tree = tree;
   orm.em.persist([commit, commit.tree]);
+  expect(tree.commit.id).toBe(commit.id);
   await orm.em.flush();
   orm.em.clear();
 
   const repo1 = await orm.em.findOneOrFail(RepoModel, { id: repo.id });
   expect(repo1.id).toBe(repo.id);
 
-  const tree = await orm.em.findOneOrFail(TreeModel, { repo, sha: "treeSha" });
-  expect(tree.sha).toBe("treeSha");
-  expect(tree.commit.id).toBe(commit.id);
+  const tree1 = await orm.em.findOneOrFail(TreeModel, { repo, sha: "treeSha" });
+  expect(tree1.sha).toBe("treeSha");
+  expect(tree1.commit.id).toBe(commit.id);
+  
   const count = await orm.em.count(RepoModel, { id: repo.id });
   expect(count).toBe(1);
 });
