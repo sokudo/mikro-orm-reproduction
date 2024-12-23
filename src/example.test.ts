@@ -1,31 +1,95 @@
-import { Entity, MikroORM, PrimaryKey, Property } from '@mikro-orm/sqlite';
+import {
+  Collection,
+  Entity,
+  ManyToOne,
+  MikroORM,
+  OneToMany,
+  PrimaryKey,
+  Property,
+  Rel,
+  Unique,
+} from "@mikro-orm/sqlite";
+import { TsMorphMetadataProvider } from "@mikro-orm/reflection";
+
+class IdGen {
+  id = 0;
+  next = () =>  this.id++;
+}
+
+const genId = new IdGen().next;
+
 
 @Entity()
-class User {
+export class RepoModel {
+  @PrimaryKey()
+  id!: number;
 
+  @OneToMany(() => CommitModel, (c) => c.repo, { orphanRemoval: true })
+  commits = new Collection<CommitModel>(this);
+
+  constructor(x: Partial<RepoModel>) {
+    this.id = x.id ?? genId();
+  }
+}
+
+@Entity()
+@Unique({ properties: ["repo", "sha"] })
+export class CommitModel {
   @PrimaryKey()
   id!: number;
 
   @Property()
-  name: string;
+  sha!: string;
 
-  @Property({ unique: true })
-  email: string;
+  @ManyToOne()
+  repo!: RepoModel;
 
-  constructor(name: string, email: string) {
-    this.name = name;
-    this.email = email;
+  @ManyToOne()
+  tree!: Rel<TreeModel>;
+
+  constructor(x: Partial<CommitModel> & Pick<CommitModel, "sha" | "repo">) {
+    this.id = x.id ?? genId();
+    this.sha = x.sha;
+    this.repo = x.repo;
+    if (x.tree) {
+      this.tree = x.tree;
+    }
   }
+}
 
+@Entity()
+@Unique({ properties: ["repo", "sha"] })
+export class TreeModel {
+  @PrimaryKey()
+  id!: number;
+
+  @Property()
+  sha!: string;
+
+  @ManyToOne()
+  repo!: RepoModel;
+
+  //@ManyToOne()
+  //commit!: CommitModel;
+
+  constructor(x: Partial<TreeModel> & Pick<TreeModel, "sha" | "repo">) {
+    this.id = x.id ?? genId();
+    this.sha = x.sha;
+    this.repo = x.repo;
+    /*if (x.commit) {
+      this.commit = x.commit;
+    }*/
+  }
 }
 
 let orm: MikroORM;
 
 beforeAll(async () => {
   orm = await MikroORM.init({
-    dbName: ':memory:',
-    entities: [User],
-    debug: ['query', 'query-params'],
+    metadataProvider: TsMorphMetadataProvider,
+    dbName: ":memory:",
+    entities: [RepoModel, CommitModel, TreeModel],
+    debug: ["query", "query-params"],
     allowGlobalContext: true, // only for testing
   });
   await orm.schema.refreshDatabase();
@@ -35,17 +99,20 @@ afterAll(async () => {
   await orm.close(true);
 });
 
-test('basic CRUD example', async () => {
-  orm.em.create(User, { name: 'Foo', email: 'foo' });
+test("basic CRUD example", async () => {
+  const repo = orm.em.create(RepoModel, {});
+  const commit = new CommitModel({ sha: "repoSha", repo });
+  commit.tree = new TreeModel({ sha: "treeSha", repo });
+  orm.em.persist([commit, commit.tree]);
   await orm.em.flush();
   orm.em.clear();
 
-  const user = await orm.em.findOneOrFail(User, { email: 'foo' });
-  expect(user.name).toBe('Foo');
-  user.name = 'Bar';
-  orm.em.remove(user);
-  await orm.em.flush();
+  const repo1 = await orm.em.findOneOrFail(RepoModel, { id: repo.id });
+  expect(repo1.id).toBe(repo.id);
 
-  const count = await orm.em.count(User, { email: 'foo' });
-  expect(count).toBe(0);
+  const tree = await orm.em.findOneOrFail(TreeModel, { repo, sha: "treeSha" });
+  expect(tree.sha).toBe("treeSha");
+  //expect(tree.commit.id).toBe(commit.id);
+  const count = await orm.em.count(RepoModel, { id: repo.id });
+  expect(count).toBe(1);
 });
