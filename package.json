@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "jest",
-    "test": "jest"
+    "test": "jest --detectOpenHandles"
   },
   "author": "Martin Adamek",
   "license": "MIT",
