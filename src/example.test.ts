@@ -69,16 +69,16 @@ export class TreeModel {
   @ManyToOne()
   repo!: RepoModel;
 
-  //@ManyToOne()
-  //commit!: CommitModel;
+  @ManyToOne()
+  commit!: CommitModel;
 
   constructor(x: Partial<TreeModel> & Pick<TreeModel, "sha" | "repo">) {
     this.id = x.id ?? genId();
     this.sha = x.sha;
     this.repo = x.repo;
-    /*if (x.commit) {
+    if (x.commit) {
       this.commit = x.commit;
-    }*/
+    }
   }
 }
 
@@ -102,7 +102,7 @@ afterAll(async () => {
 test("basic CRUD example", async () => {
   const repo = orm.em.create(RepoModel, {});
   const commit = new CommitModel({ sha: "repoSha", repo });
-  commit.tree = new TreeModel({ sha: "treeSha", repo });
+  commit.tree = new TreeModel({ sha: "treeSha", repo, commit });
   orm.em.persist([commit, commit.tree]);
   await orm.em.flush();
   orm.em.clear();
@@ -112,7 +112,7 @@ test("basic CRUD example", async () => {
 
   const tree = await orm.em.findOneOrFail(TreeModel, { repo, sha: "treeSha" });
   expect(tree.sha).toBe("treeSha");
-  //expect(tree.commit.id).toBe(commit.id);
+  expect(tree.commit.id).toBe(commit.id);
   const count = await orm.em.count(RepoModel, { id: repo.id });
   expect(count).toBe(1);
 });
